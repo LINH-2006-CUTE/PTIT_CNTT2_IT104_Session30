@@ -1,3 +1,30 @@
 {
-  "todos": []
+  "tasks": [
+    {
+      "id": 2,
+      "name": "Quét nhà",
+      "status": "false"
+    },
+    {
+      "id": 3,
+      "name": "Rửa bát",
+      "status": "false"
+    },
+    {
+      "id": 6,
+      "name": "Học",
+      "status": "false"
+    },
+    {
+      "name": "Đọc sách",
+      "status": "false",
+      "id": 7
+    },
+    {
+      "name": "Lập trình",
+      "status": "false",
+      "id": 8
+    }
+   
+  ]
 }

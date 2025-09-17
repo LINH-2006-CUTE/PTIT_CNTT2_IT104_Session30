@@ -1,149 +1,308 @@
 import React, { useEffect, useState } from "react";
-import { Button, Input, List, Spin, Checkbox, Modal, message } from "antd";
-import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import ListTask from "./List";
 import axios from "axios";
+import { Button, Form, Input, Modal, Spin, type FormProps } from "antd";
+import { LoadingOutlined } from "@ant-design/icons";
+import { useForm } from "antd/es/form/Form";
 
-interface Todo {
-  id: number;
-  title: string;
-  completed: boolean;
+interface Task {
+  id?: number;
+  name: string;
+  status: string;
 }
 
-export default function TodoList() {
-  const [todos, setTodos] = useState<Todo[]>([]);
+export default function TaskManager() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isOpenModel, setIsOpenModel] = useState<boolean>(false);
+  const [targetDelete, setTargetDelete] = useState<Task | undefined>(undefined);
+  const [inputNewTask, setInputNewTask] = useState<string>("");
+  const [errorInput, setErrorInput] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
-  const [newTodo, setNewTodo] = useState<string>("");
-  const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
-  const [editText, setEditText] = useState<string>("");
+  const [targetEdit, setTargetEdit] = useState<Task | undefined>(undefined);
+  const [isOpenModelEdit, setIsOpenModelEdit] = useState<boolean>(false);
+  const [form] = Form.useForm();
+  const [statusTask, setStatusTask] = useState<string>("");
+  const loadTasks = async () => {
+    try {
+      const query = statusTask == "true" ? "status=true" : statusTask === "false" ? "status=false" : ""; 
+      const response = await axios.get(
+        `http://localhost:8080/tasks${query ? `?${query}` : ""}`
+      );
+      setTasks(response.data);
+    } catch (error) {
+      console.log(error);
+    }
+  };
 
-  const API_URL = "http://localhost:3000/todos";
-
-  //danh sách công việc
   useEffect(() => {
-    fetchTodos();
-  }, []);
-
-  const fetchTodos = async () => {
-    try {
-      setLoading(true);
-      const res = await axios.get(API_URL);
-      setTodos(res.data);
-    } catch (err) {
-      message.error("Không tải dc dữ liệu");
-    } finally {
+    setErrorInput("");
+    setLoading(true);
+    const timeOut = setTimeout(() => {
+      loadTasks();
       setLoading(false);
+      clearTimeout(timeOut);
+    }, 500);
+  }, [statusTask]);
+
+  const handleDeleteTask = async (id: number) => {
+    setIsOpenModel(true);
+    const targetTaskDel = tasks.find((task) => task.id === id);
+    if (targetTaskDel) {
+      setTargetDelete(targetTaskDel);
     }
   };
-
-  // Thêm công việc
-  const addTodo = async () => {
-    if (!newTodo.trim()) {
-      message.error("Tên công việc không được để trống!");
-      return;
-    }
+  const handleOk = async () => {
     try {
-      const res = await axios.post(API_URL, {
-        title: newTodo,
-        completed: false,
-      });
-      setTodos([...todos, res.data]);
-      setNewTodo("");
-    } catch {
-      message.error("Không thêm được công việc");
+      const response = await axios.delete(
+        `http://localhost:8080/tasks/${targetDelete?.id}`
+      );
+
+      if (response.status === 200) {
+        // Hiển thị thông báo
+        alert("Xóa thành công");
+        setIsOpenModel(false);
+
+        // Load lại dữ liệu
+        loadTasks();
+      }
+    } catch (error) {
+      console.log("Error: ", error);
     }
   };
 
-  // Xóa công việc
-  const deleteTodo = async (id: number) => {
+  const handleCancel = () => {
+    setIsOpenModel(false);
+  };
+  const handleEditTask = (id: number) => {
+    setIsOpenModelEdit(true);
+    const target = tasks.find((task) => task.id === id);
+    if (target) {
+      setTargetEdit(target);
+      console.log(target);
+      form.setFieldsValue(target);
+    }
+  };
+
+  const handleInputTask = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setErrorInput("");
+    setInputNewTask(e.target.value);
+  };
+
+  const handleAddTask = () => {
+    if (inputNewTask) {
+      setErrorInput("");
+      const newTask: Task = {
+        name: inputNewTask,
+        status: "false",
+      };
+      axios
+        .post("http://localhost:8080/tasks", newTask)
+        .then(() => {
+          console.log("Thêm mới nhiệm vụ thành công");
+          loadTasks();
+          setInputNewTask("");
+        })
+        .catch(() => {
+          console.log("Thêm mới chưa thành công");
+        })
+        .finally(() => {
+          console.log();
+        });
+    } else {
+      setErrorInput("Tên nhiệm vụ không được để trống");
+    }
+  };
+
+  const handleToggleStatus = (id: number) => {
+    const targetToggle = tasks.find((task) => task.id === id);
+    if (targetToggle) {
+      axios
+        .put(`http://localhost:8080/tasks/${id}`, {
+          ...targetToggle,
+          status: targetToggle.status === "true" ? "false" : "true",
+        })
+        .then(() => {
+          console.log("Cập nhật trạng thái thành công");
+          loadTasks();
+        })
+        .catch(() => {
+          console.log("Cập nhật trạng thái chưa thành công");
+        });
+    }
+  };
+
+  const onFinish: FormProps<Task>["onFinish"] = (values) => {
+    console.log("Success:", values);
     try {
-      await axios.delete(`${API_URL}/${id}`);
-      setTodos(todos.filter((todo) => todo.id !== id));
-    } catch {
-      message.error("Không xóa được công việc");
+      axios
+        .put(`http://localhost:8080/tasks/${targetEdit?.id}`, {
+          ...targetEdit,
+          ...values,
+        })
+        .then(() => {
+          console.log("Cập nhật thông tin thành công");
+          setIsOpenModelEdit(false);
+          loadTasks();
+          setTargetEdit(undefined);
+        })
+        .catch(() => {
+          console.log("Cập nhật thông tin chưa thành công");
+        });
+    } catch (error) {
+      console.log(error);
     }
   };
-
-  // trạng thái công việc
-  const toggleTodo = async (todo: Todo) => {
-    try {
-      const updated = { ...todo, completed: !todo.completed };
-      await axios.put(`${API_URL}/${todo.id}`, updated);
-      setTodos(todos.map((t) => (t.id === todo.id ? updated : t)));
-    } catch {
-      message.error("Lỗi !");
-    }
+  const handleCancelEdit = () => {
+    setIsOpenModelEdit(false);
   };
 
-  // Sửa công việc
-  const handleEdit = (todo: Todo) => {
-    setEditingTodo(todo);
-    setEditText(todo.title);
-  };
-
-  const saveEdit = async () => {
-    if (!editingTodo) return;
-    try {
-      const updated = { ...editingTodo, title: editText };
-      await axios.put(`${API_URL}/${editingTodo.id}`, updated);
-      setTodos(todos.map((t) => (t.id === editingTodo.id ? updated : t)));
-      setEditingTodo(null);
-    } catch {
-      message.error("Lỗi ");
-    }
+  const onFinishFailed: FormProps<Task>["onFinishFailed"] = (errorInfo) => {
+    console.log("Failed:", errorInfo);
+    handleCancelEdit();
   };
 
   return (
-    <div style={{ width: "500px", margin: "20px", padding: 20,borderRadius: 8 }}>
-      {/* Title */}
-      <h2 style={{ textAlign: "center" }}>Quản lý công việc</h2>
-
-      {/* Input thêm công việc */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-        <Input
-          placeholder="Nhập công việc..."
-          value={newTodo}
-          onChange={(e) => setNewTodo(e.target.value)}
-        />
-        <Button type="primary" onClick={addTodo}>
-          Thêm
-        </Button>
-      </div>
-
-      {/* Loading */}
+    <>
       {loading ? (
-        <Spin tip="Đang tải dữ liệu..." />
+        <>
+          <div>
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                backgroundColor: "#000",
+                opacity:0.3,
+              }}
+              className="overlay"
+            ></div>
+            <Spin
+              style={{
+                color: "white",
+                position: "fixed",
+                top: "45%",
+                left: "50%",
+              }}
+              indicator={<LoadingOutlined style={{ fontSize: 48 }} spin />}
+            />
+          </div>
+        </>
       ) : (
-        <List
-          bordered
-          dataSource={todos}
-          renderItem={(todo) => (
-            <List.Item
-              actions={[
-                <Button type="link" icon={<EditOutlined />} onClick={() => handleEdit(todo)} />,
-                <Button type="link" danger icon={<DeleteOutlined />} onClick={() => deleteTodo(todo.id)} />,
-              ]}
-            >
-              <Checkbox
-                checked={todo.completed}
-                onChange={() => toggleTodo(todo)}
-              >
-                {todo.completed ? <del>{todo.title}</del> : todo.title}
-              </Checkbox>
-            </List.Item>
-          )}
-        />
+        <></>
       )}
 
-      {/* Modal sửa công việc */}
-      <Modal
-        open={!!editingTodo}
-        onCancel={() => setEditingTodo(null)}
-        onOk={saveEdit}
-        okText="Lưu"
-        cancelText="Hủy"
-      >
-        <Input value={editText} onChange={(e) => setEditText(e.target.value)} />
-      </Modal>
-    </div>
+      <div className="task-manager">
+        <h2>Quản lý công việc</h2>
+        <div className="inputAddTask">
+          <input
+            value={inputNewTask}
+            style={{ borderColor: errorInput === "" ? "#dedede" : "red" }}
+            onChange={handleInputTask}
+            placeholder="Nhập tên công việc"
+            type="text"
+          />
+          {errorInput === "" ? (
+            <></>
+          ) : (
+            <div style={{ color: "red", fontSize: "10px" }}>{errorInput}</div>
+          )}
+          <button onClick={handleAddTask} className="btn-active">
+            Thêm công việc
+          </button>
+        </div>
+        <div className="btn-filter">
+          <button
+            onClick={() => setStatusTask("")}
+            className={statusTask === "" ? "btn-active" : ""}
+          >
+            Tất cả
+          </button>
+          <button
+            onClick={() => setStatusTask("true")}
+            className={statusTask === "true" ? "btn-active" : ""}
+          >
+            Hoàn thành
+          </button>
+          <button
+            onClick={() => setStatusTask("false")}
+            className={statusTask === "false" ? "btn-active" : ""}
+          >
+            Đang thực hiện
+          </button>
+        </div>
+        <ListTask
+          listTask={tasks}
+          handleDelete={handleDeleteTask}
+          handleEdit={handleEditTask}
+          handleToggleStatus={handleToggleStatus}
+        />
+        <div className="delete-action">
+          <button style={{ backgroundColor: "#FF4D4F", color: "#fff" }}>
+            Xóa công việc hoàn thành
+          </button>
+          <button style={{ backgroundColor: "#FF4D4F", color: "#fff" }}>
+            Xóa tất cả công việc
+          </button>
+        </div>
+      </div>
+
+      <>
+        <Modal
+          title="Xác nhận"
+          open={isOpenModel}
+          closable={true}
+          onOk={handleOk}
+          onCancel={handleCancel}
+        >
+          <p>{`Bạn chắc chắn xóa nhiệm vụ <${targetDelete?.name}>`}</p>
+        </Modal>
+      </>
+      <div>
+        <>
+          <Modal
+            title="Cập nhật thông tin"
+            closable={true}
+            open={isOpenModelEdit}
+            onCancel={handleCancelEdit}
+            footer={false}
+          >
+            <Form
+              form={form}
+              name="basic"
+              style={{ maxWidth: "100%" }}
+              initialValues={targetEdit}
+              onFinish={onFinish}
+              onFinishFailed={onFinishFailed}
+              autoComplete="off"
+            >
+              <Form.Item<Task> name="name">
+                <Input />
+              </Form.Item>
+
+              <Form.Item label={null}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    gap: 10,
+                    justifyContent: "flex-end",
+                  }}
+                >
+                  <Button type="primary" htmlType="submit">
+                    Cập nhật
+                  </Button>
+                  <Button
+                    type="default"
+                    htmlType="button"
+                    onClick={handleCancelEdit}
+                  >
+                    Hủy
+                  </Button>
+                </div>
+              </Form.Item>
+            </Form>
+          </Modal>
+        </>
+      </div>
+    </>
   );
 }
